@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Монитор статуса группы</title>
+    <style>
+        /* --- Стилизация CSS --- */
+        /* На основе вашего дизайна в image_2.png */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #1c1e21;
+        }
+
+        p {
+            margin: 0 0 20px 0;
+            color: #606770;
+            font-size: 0.9em;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .status-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            height: 48px;
+            width: 100%;
+        }
+
+        .status-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Цвета кнопок из вашего дизайна */
+        .status-btn.green {
+            background-color: #34a853;
+        }
+
+        .status-btn.yellow {
+            background-color: #fbbc05;
+            color: #000000;
+        }
+
+        .status-btn.teal {
+            background-color: #1098ad;
+        }
+
+        .status-btn.gray {
+            background-color: #70757a;
+        }
+
+        /* Эмодзи внутри кнопок */
+        .status-btn i {
+            margin-right: 8px;
+            font-style: normal;
+        }
+
+        /* Стилизация списка мониторинга */
+        #group-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #group-list .user-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        #group-list .user-item:last-child {
+            border-bottom: none;
+        }
+
+        #group-list .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+            display: block;
+        }
+
+        #group-list .user-info {
+            flex-grow: 1;
+        }
+
+        #group-list .username {
+            font-weight: 600;
+            color: #1c1e21;
+        }
+
+        #group-list .user-status {
+            color: #606770;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="card">
+            <h2>Мой профиль</h2>
+            <p id="myInfo">Вы зашли как: <span class="loading">Загрузка...</span></p>
+
+            <div class="button-group">
+                <button class="status-btn green" onclick="changeStatus('Учусь', '#34a853')">
+                    <i>📖</i> Учусь
+                </button>
+                <button class="status-btn yellow" onclick="changeStatus('Кофе-брейк', '#fbbc05')">
+                    <i>☕</i> Кофе-брейк
+                </button>
+                <button class="status-btn teal" onclick="changeStatus('В игре', '#1098ad')">
+                    <i>🎮</i> В игре
+                </button>
+                <button class="status-btn gray" onclick="changeStatus('Дома', '#70757a')">
+                    <i>🏠</i> Дома
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Монитор группы</h2>
+            <ul id="group-list">
+                <p class="loading">Загрузка списка группы...</p>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module">
+        // Импорт Supabase
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+        // Константы Supabase (из image_0.png)
+        const URL = 'https://bopfzedgzxirjvwimfga.supabase.co';
+        const KEY = 'sb_publishable_nsYy6DM2k69pZBscDr_3Iw_g5o3e0zQ';
+        const supabase = createClient(URL, KEY);
+
+        // ID текущего пользователя (из image_0.png)
+        // В реальном приложении это должно приходить от системы аутентификации
+        const MY_ID = '16cbf157-34be-433b-bc08-1d255777125f';
+
+        // --- Функция: Изменение статуса (из image_0.png) ---
+        // Мы делаем ее доступной глобально (через window), чтобы кнопки могли ее вызывать
+        window.changeStatus = async (text, color) => {
+            console.log(`Попытка изменить статус на: ${text}`);
+            const { error } = await supabase
+                .from('profiles')
+                .update({ status: text, color: color })
+                .eq('id', MY_ID);
+
+            if (error) {
+                console.error("Supabase Error:", error);
+                // Это сообщение об ошибке на русском языке, как в вашем коде
+                alert("Ошибка! Проверьте RLS политики в Supabase.");
+            } else {
+                console.log("Статус успешно обновлен!");
+                // Немедленно обновляем список, не дожидаясь интервала
+                fetchGroup();
+            }
+        };
+
+        // --- Функция: Получение данных группы (из image_1.png) ---
+        async function fetchGroup() {
+            console.log("Запрос списка группы...");
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('username', { ascending: true });
+
+            if (error) {
+                console.error("Ошибка при получении группы:", error);
+                return;
+            }
+
+            console.log(`Получены данные для ${data.length} пользователей.`);
+
+            // --- 1. Обновление списка группы (Логика из image_1.png) ---
+            const list = document.getElementById('group-list');
+            
+            if (data.length === 0) {
+                list.innerHTML = '<p>В группе пока нет пользователей.</p>';
+                return;
+            }
+
+            // HTML для каждого пользователя в списке
+            const itemsHtml = data.map(user => {
+                const userColor = user.color || '#ccc'; // Если цвета нет, используем серый по умолчанию
+                const userStatus = user.status || 'Статус не задан'; // Сообщение, если статус пуст
+
+                // Эта структура HTML соответствует вашему дизайну из image_2.png, но заполняется динамически
+                return `
+                    <li class="user-item">
+                        <div class="status-dot" style="background-color: ${userColor};"></div>
+                        <div class="user-info">
+                            <span class="username">${user.username}</span><br>
+                            <span class="user-status">${userStatus}</span>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+            
+            list.innerHTML = itemsHtml;
+
+            // --- 2. Обновление "Мой профиль" (Логика из image_1.png) ---
+            const me = data.find(u => u.id === MY_ID);
+            const myInfo
