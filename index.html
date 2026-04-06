@@ -18,104 +18,173 @@
         .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 24px; }
         h2 { margin: 0 0 10px 0; }
         .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
-        .status-btn { 
-            border: none; border-radius: 8px; color: white; font-weight: 600; 
+        .status-btn {
+            border: none; border-radius: 8px; color: white; font-weight: 600;
             cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;
         }
-        .green { background: #34a853; }
+        .green  { background: #34a853; }
         .yellow { background: #fbbc05; color: black; }
-        .teal { background: #1098ad; }
-        .gray { background: #70757a; }
-        
+        .teal   { background: #1098ad; }
+        .gray   { background: #70757a; }
+
         #group-list { list-style: none; padding: 0; margin: 0; }
         .user-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-        .status-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
         .username { font-weight: bold; }
         .user-status { color: #666; font-size: 0.9em; }
+
+        /* Экран входа */
+        #login-screen { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        #login-screen p { color: #555; margin: 0; }
+        .google-btn {
+            display: flex; align-items: center; gap: 10px;
+            background: white; border: 1px solid #ddd; border-radius: 8px;
+            padding: 12px 20px; font-size: 1em; font-weight: 600;
+            cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: box-shadow 0.2s;
+        }
+        .google-btn:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+        .google-btn img { width: 20px; height: 20px; }
+        .logout-btn {
+            background: none; border: 1px solid #ddd; border-radius: 6px;
+            padding: 6px 14px; cursor: pointer; color: #666; font-size: 0.85em;
+        }
+        .logout-btn:hover { background: #f5f5f5; }
+        .profile-header { display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="card">
-            <h2>Мой профиль</h2>
-            <p id="myInfo">Загрузка профиля...</p>
-            <div class="button-group">
-                <button class="status-btn green" onclick="changeStatus('Учусь', '#34a853')">📖 Учусь</button>
-                <button class="status-btn yellow" onclick="changeStatus('Кофе-брейк', '#fbbc05')">☕ Кофе-брейк</button>
-                <button class="status-btn teal" onclick="changeStatus('В игре', '#1098ad')">🎮 В игре</button>
-                <button class="status-btn gray" onclick="changeStatus('Дома', '#70757a')">🏠 Дома</button>
-            </div>
-        </div>
+<div class="container" id="app" style="display:none">
 
-        <div class="card">
-            <h2>Монитор группы</h2>
-            <div id="group-list">Загрузка списка группы...</div>
+    <!-- Экран входа -->
+    <div class="card" id="login-screen" style="display:none">
+        <h2 style="margin:0">Войдите в аккаунт</h2>
+        <p>Чтобы установить статус, войдите через Google</p>
+        <button class="google-btn" onclick="signInWithGoogle()">
+            <img src="https://www.google.com/favicon.ico" alt="G">
+            Войти через Google
+        </button>
+    </div>
+
+    <!-- Профиль (показывается только после входа) -->
+    <div class="card" id="profile-card" style="display:none">
+        <div class="profile-header">
+            <h2 style="margin:0">Мой профиль</h2>
+            <button class="logout-btn" onclick="signOut()">Выйти</button>
+        </div>
+        <p id="myInfo" style="margin: 8px 0 0 0"></p>
+        <div class="button-group">
+            <button class="status-btn green"  onclick="changeStatus('Учусь', '#34a853')">📖 Учусь</button>
+            <button class="status-btn yellow" onclick="changeStatus('Кофе-брейк', '#fbbc05')">☕ Кофе-брейк</button>
+            <button class="status-btn teal"   onclick="changeStatus('В игре', '#1098ad')">🎮 В игре</button>
+            <button class="status-btn gray"   onclick="changeStatus('Дома', '#70757a')">🏠 Дома</button>
         </div>
     </div>
 
-    <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+    <!-- Монитор группы (виден всегда) -->
+    <div class="card">
+        <h2>Монитор группы</h2>
+        <div id="group-list">Загрузка...</div>
+    </div>
 
-        const URL = 'https://bopfzedgzxirjvwimfga.supabase.co';
-        const KEY = 'sb_publishable_nsYy6DM2k69pZBscDr_3Iw_g5o3e0zQ';
-        const supabase = createClient(URL, KEY);
+</div>
 
-        // ОБЯЗАТЕЛЬНО: Проверь этот ID, он должен быть из твоей колонки 'id' в Supabase
-        const MY_ID = '247d960d-52f1-4742-9d8d-89a78058943a'; 
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-        // Делаем функцию ГЛОБАЛЬНОЙ через window, чтобы работал onclick в HTML
-        window.changeStatus = async (text, color) => {
-            console.log("Обновление статуса на:", text);
-            const { error } = await supabase
-                .from('profiles')
-                .update({ status: text, color: color })
-                .eq('id', MY_ID);
+    const SUPABASE_URL = 'https://bopfzedgzxirjvwimfga.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_nsYy6DM2k69pZBscDr_3Iw_g5o3e0zQ';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-            if (error) {
-                console.error("Ошибка обновления:", error);
-                alert("Ошибка! Проверьте RLS политики.");
-            } else {
-                fetchGroup(); // Сразу обновляем список после нажатия
+    let currentUserId = null;
+
+    // ─── Auth действия ────────────────────────────────────────────
+    window.signInWithGoogle = async () => {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href  // вернуть на эту же страницу
             }
-        };
+        });
+        if (error) alert('Ошибка входа: ' + error.message);
+    };
 
-        async function fetchGroup() {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('username', { ascending: true });
+    window.signOut = async () => {
+        await supabase.auth.signOut();
+        // onAuthStateChange сам обновит UI
+    };
 
-            if (error) {
-                console.error("Ошибка загрузки:", error);
-                return;
-            }
+    // ─── Смена статуса ────────────────────────────────────────────
+    window.changeStatus = async (text, color) => {
+        if (!currentUserId) return;
+        const { error } = await supabase
+            .from('profiles')
+            .update({ status: text, color: color })
+            .eq('id', currentUserId);
 
-            // Рендерим список группы
-            const listContainer = document.getElementById('group-list');
-            listContainer.innerHTML = data.map(user => `
-                <div class="user-item">
-                    <div class="status-dot" style="background: ${user.color || '#ccc'}"></div>
-                    <div>
-                        <div class="username">${user.username}</div>
-                        <div class="user-status">${user.status || 'Нет статуса'}</div>
-                    </div>
-                </div>
-            `).join('');
-
-            // Обновляем инфо о себе
-            const me = data.find(u => u.id === MY_ID);
-            if (me) {
-                document.getElementById('myInfo').innerHTML = `Вы зашли как: <b>${me.username}</b>`;
-            } else {
-                document.getElementById('myInfo').innerHTML = `<span style="color:red">Пользователь с вашим ID не найден в базе</span>`;
-            }
+        if (error) {
+            console.error('Ошибка обновления:', error);
+            alert('Ошибка! Проверьте RLS политики.');
+        } else {
+            fetchGroup();
         }
+    };
 
-        // Запуск при загрузке
+    // ─── Загрузка списка группы ───────────────────────────────────
+    async function fetchGroup() {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('username', { ascending: true });
+
+        if (error) { console.error('Ошибка загрузки:', error); return; }
+
+        document.getElementById('group-list').innerHTML = data.map(user => `
+            <div class="user-item">
+                <div class="status-dot" style="background: ${user.color || '#ccc'}"></div>
+                <div>
+                    <div class="username">${user.username}</div>
+                    <div class="user-status">${user.status || 'Нет статуса'}</div>
+                </div>
+            </div>
+        `).join('');
+
+        if (currentUserId) {
+            const me = data.find(u => u.id === currentUserId);
+            document.getElementById('myInfo').innerHTML = me
+                ? `Вы: <b>${me.username}</b>`
+                : `<span style="color:red">Профиль не найден — создайте запись в таблице profiles</span>`;
+        }
+    }
+
+    // ─── Обновление UI в зависимости от сессии ───────────────────
+    function updateUI(session) {
+        document.getElementById('app').style.display = 'flex';
+
+        if (session) {
+            currentUserId = session.user.id;
+            document.getElementById('login-screen').style.display  = 'none';
+            document.getElementById('profile-card').style.display  = 'block';
+        } else {
+            currentUserId = null;
+            document.getElementById('login-screen').style.display  = 'flex';
+            document.getElementById('profile-card').style.display  = 'none';
+        }
         fetchGroup();
-        // Обновление каждые 5 секунд
-        setInterval(fetchGroup, 5000);
-    </script>
+    }
+
+    // ─── Слушаем изменения авторизации ───────────────────────────
+    supabase.auth.onAuthStateChange((_event, session) => {
+        updateUI(session);
+    });
+
+    // ─── Первичная проверка сессии ────────────────────────────────
+    const { data: { session } } = await supabase.auth.getSession();
+    updateUI(session);
+
+    // Автообновление каждые 5 секунд
+    setInterval(fetchGroup, 5000);
+</script>
 </body>
 </html>
