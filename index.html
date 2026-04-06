@@ -14,26 +14,53 @@
             align-items: center;
             min-height: 100vh;
         }
-        .container { width: 90%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
+        .container { width: 90%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; padding: 20px 0; }
         .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 24px; }
         h2 { margin: 0 0 10px 0; }
         .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
         .status-btn {
             border: none; border-radius: 8px; color: white; font-weight: 600;
             cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.95em; transition: opacity 0.2s;
         }
+        .status-btn:hover { opacity: 0.85; }
+        .status-btn.active { outline: 3px solid #000; outline-offset: 2px; }
         .green  { background: #34a853; }
         .yellow { background: #fbbc05; color: black; }
         .teal   { background: #1098ad; }
         .gray   { background: #70757a; }
 
-        #group-list { list-style: none; padding: 0; margin: 0; }
-        .user-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-        .status-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
-        .username { font-weight: bold; }
-        .user-status { color: #666; font-size: 0.9em; }
+        /* Таймер учёбы */
+        .study-timer {
+            text-align: center;
+            padding: 12px 0 4px;
+            font-size: 2em;
+            font-weight: 700;
+            color: #34a853;
+            display: none;
+        }
+        .study-timer span { font-size: 0.45em; color: #666; display: block; margin-top: -4px; font-weight: 400; }
 
-        /* Экран входа */
+        /* Список группы */
+        .user-item {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            padding: 12px 0; border-bottom: 1px solid #eee;
+        }
+        .user-left { display: flex; align-items: center; gap: 10px; }
+        .online-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #ccc; flex-shrink: 0;
+            box-shadow: 0 0 0 2px white;
+        }
+        .online-dot.online { background: #34a853; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .username { font-weight: bold; font-size: 0.95em; }
+        .user-status { color: #666; font-size: 0.85em; }
+        .user-right { text-align: right; }
+        .user-timer { font-size: 0.8em; color: #34a853; font-weight: 600; }
+
+        /* Логин */
         #login-screen { display: flex; flex-direction: column; align-items: center; gap: 16px; }
         #login-screen p { color: #555; margin: 0; }
         .google-btn {
@@ -57,7 +84,6 @@
 
 <div class="container" id="app" style="display:none">
 
-    <!-- Экран входа -->
     <div class="card" id="login-screen" style="display:none">
         <h2 style="margin:0">Войдите в аккаунт</h2>
         <p>Чтобы установить статус, войдите через Google</p>
@@ -67,24 +93,29 @@
         </button>
     </div>
 
-    <!-- Профиль (показывается только после входа) -->
     <div class="card" id="profile-card" style="display:none">
         <div class="profile-header">
             <h2 style="margin:0">Мой профиль</h2>
             <button class="logout-btn" onclick="signOut()">Выйти</button>
         </div>
         <p id="myInfo" style="margin: 8px 0 0 0"></p>
+
+        <!-- Таймер учёбы -->
+        <div class="study-timer" id="myTimer">
+            ⏱ <span id="timerDisplay">0ч 0м 0с</span>
+            <span>время в учёбе</span>
+        </div>
+
         <div class="button-group">
-            <button class="status-btn green"  onclick="changeStatus('Учусь', '#34a853')">📖 Учусь</button>
-            <button class="status-btn yellow" onclick="changeStatus('Кофе-брейк', '#fbbc05')">☕ Кофе-брейк</button>
-            <button class="status-btn teal"   onclick="changeStatus('В игре', '#1098ad')">🎮 В игре</button>
-            <button class="status-btn gray"   onclick="changeStatus('Дома', '#70757a')">🏠 Дома</button>
+            <button class="status-btn green"  id="btn-study"  onclick="changeStatus('Учусь', '#34a853', this)">📖 Учусь</button>
+            <button class="status-btn yellow" id="btn-coffee" onclick="changeStatus('Кофе-брейк', '#fbbc05', this)">☕ Кофе-брейк</button>
+            <button class="status-btn teal"   id="btn-game"   onclick="changeStatus('В игре', '#1098ad', this)">🎮 В игре</button>
+            <button class="status-btn gray"   id="btn-home"   onclick="changeStatus('Дома', '#70757a', this)">🏠 Дома</button>
         </div>
     </div>
 
-    <!-- Монитор группы (виден всегда) -->
     <div class="card">
-        <h2>Монитор группы</h2>
+        <h2>👥 Монитор группы</h2>
         <div id="group-list">Загрузка...</div>
     </div>
 
@@ -98,35 +129,91 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let currentUserId = null;
+    let studyStartTime = null;   // когда начал учиться
+    let timerInterval = null;    // интервал таймера
+    let heartbeatInterval = null;
 
-    // ─── Auth действия ────────────────────────────────────────────
+    // ─── Форматирование времени ───────────────────────────────────
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h}ч ${m}м ${s}с`;
+    }
+
+    // ─── Запуск/остановка таймера ─────────────────────────────────
+    function startTimer(fromTimestamp) {
+        studyStartTime = fromTimestamp ? new Date(fromTimestamp) : new Date();
+        document.getElementById('myTimer').style.display = 'block';
+
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - studyStartTime) / 1000);
+            document.getElementById('timerDisplay').textContent = formatTime(elapsed);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        studyStartTime = null;
+        document.getElementById('myTimer').style.display = 'none';
+    }
+
+    // ─── Heartbeat (онлайн-индикатор) ────────────────────────────
+    async function sendHeartbeat() {
+        if (!currentUserId) return;
+        await supabase.from('profiles')
+            .update({ last_seen: new Date().toISOString() })
+            .eq('id', currentUserId);
+    }
+
+    function isOnline(lastSeen) {
+        if (!lastSeen) return false;
+        return (Date.now() - new Date(lastSeen)) < 30000; // онлайн если был < 30 сек назад
+    }
+
+    // ─── Auth ─────────────────────────────────────────────────────
     window.signInWithGoogle = async () => {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
-            options: {
-                redirectTo: window.location.href  // вернуть на эту же страницу
-            }
+            options: { redirectTo: window.location.href }
         });
         if (error) alert('Ошибка входа: ' + error.message);
     };
 
     window.signOut = async () => {
+        stopTimer();
+        clearInterval(heartbeatInterval);
         await supabase.auth.signOut();
-        // onAuthStateChange сам обновит UI
     };
 
     // ─── Смена статуса ────────────────────────────────────────────
-    window.changeStatus = async (text, color) => {
+    window.changeStatus = async (text, color, btn) => {
         if (!currentUserId) return;
-        const { error } = await supabase
-            .from('profiles')
-            .update({ status: text, color: color })
+
+        const payload = { status: text, color: color };
+
+        // Если нажали "Учусь" — записываем время начала
+        if (text === 'Учусь') {
+            payload.study_started_at = new Date().toISOString();
+            startTimer(null);
+        } else {
+            payload.study_started_at = null;
+            stopTimer();
+        }
+
+        const { error } = await supabase.from('profiles')
+            .update(payload)
             .eq('id', currentUserId);
 
         if (error) {
             console.error('Ошибка обновления:', error);
             alert('Ошибка! Проверьте RLS политики.');
         } else {
+            // Подсветить активную кнопку
+            document.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
             fetchGroup();
         }
     };
@@ -140,50 +227,75 @@
 
         if (error) { console.error('Ошибка загрузки:', error); return; }
 
-        document.getElementById('group-list').innerHTML = data.map(user => `
-            <div class="user-item">
-                <div class="status-dot" style="background: ${user.color || '#ccc'}"></div>
-                <div>
-                    <div class="username">${user.username}</div>
-                    <div class="user-status">${user.status || 'Нет статуса'}</div>
+        document.getElementById('group-list').innerHTML = data.map(user => {
+            const online = isOnline(user.last_seen);
+            let timerHTML = '';
+
+            // Показываем таймер учёбы для тех кто учится
+            if (user.status === 'Учусь' && user.study_started_at) {
+                const elapsed = Math.floor((Date.now() - new Date(user.study_started_at)) / 1000);
+                timerHTML = `<div class="user-timer">⏱ ${formatTime(elapsed)}</div>`;
+            }
+
+            return `
+                <div class="user-item">
+                    <div class="user-left">
+                        <div class="online-dot ${online ? 'online' : ''}"></div>
+                        <div class="status-dot" style="background: ${user.color || '#ccc'}"></div>
+                        <div>
+                            <div class="username">${user.username || 'Без имени'}</div>
+                            <div class="user-status">${user.status || 'Нет статуса'}</div>
+                        </div>
+                    </div>
+                    <div class="user-right">${timerHTML}</div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         if (currentUserId) {
             const me = data.find(u => u.id === currentUserId);
-            document.getElementById('myInfo').innerHTML = me
-                ? `Вы: <b>${me.username}</b>`
-                : `<span style="color:red">Профиль не найден — создайте запись в таблице profiles</span>`;
+            if (me) {
+                document.getElementById('myInfo').innerHTML = `Вы: <b>${me.username}</b>`;
+                // Восстановить таймер если был в режиме "Учусь"
+                if (me.status === 'Учусь' && me.study_started_at && !timerInterval) {
+                    startTimer(me.study_started_at);
+                }
+            } else {
+                document.getElementById('myInfo').innerHTML =
+                    `<span style="color:red">Профиль не найден в таблице profiles</span>`;
+            }
         }
     }
 
-    // ─── Обновление UI в зависимости от сессии ───────────────────
+    // ─── UI ───────────────────────────────────────────────────────
     function updateUI(session) {
         document.getElementById('app').style.display = 'flex';
 
         if (session) {
             currentUserId = session.user.id;
-            document.getElementById('login-screen').style.display  = 'none';
-            document.getElementById('profile-card').style.display  = 'block';
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('profile-card').style.display = 'block';
+
+            // Heartbeat каждые 15 секунд
+            sendHeartbeat();
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(sendHeartbeat, 15000);
         } else {
             currentUserId = null;
-            document.getElementById('login-screen').style.display  = 'flex';
-            document.getElementById('profile-card').style.display  = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('profile-card').style.display = 'none';
+            stopTimer();
+            clearInterval(heartbeatInterval);
         }
         fetchGroup();
     }
 
-    // ─── Слушаем изменения авторизации ───────────────────────────
-    supabase.auth.onAuthStateChange((_event, session) => {
-        updateUI(session);
-    });
+    supabase.auth.onAuthStateChange((_event, session) => updateUI(session));
 
-    // ─── Первичная проверка сессии ────────────────────────────────
     const { data: { session } } = await supabase.auth.getSession();
     updateUI(session);
 
-    // Автообновление каждые 5 секунд
+    // Обновление каждые 5 секунд
     setInterval(fetchGroup, 5000);
 </script>
 </body>
