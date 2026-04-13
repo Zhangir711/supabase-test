@@ -400,7 +400,7 @@ async function fetchMessages() {
     container.scrollTop = container.scrollHeight;
 }
 
-// ─── Рейтинг ─────────────────────────────────────────────────
+// ─── Рейтинг  ─────────────────────────────────────────────────
 function renderLeaderboard(data) {
     const sorted = [...data]
         .filter(u => (u.total_study_seconds || 0) > 0)
